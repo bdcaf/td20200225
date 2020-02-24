@@ -1,4 +1,5 @@
-data-raw/*
+data-raw/*.csv
+data-raw/*.rmd
 data/*
 render/*
 make.auto
