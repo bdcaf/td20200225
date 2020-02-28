@@ -1,0 +1,240 @@
+---
+title: "measles"
+subtitle: "A vignette."
+author: "Clemens Ager"
+date: "`r Sys.Date()`"
+output: rmarkdown::html_vignette
+link-citations: yes
+---
+
+Note - I don't know the us american system. So I speculate on some correlations. 
+Mostly I suppose they don't do vaccination against the parents will, but rather I'm seeing honest typos in the data.
+Not too motivated to organized secondary sources.
+
+## Setup
+```{r}
+getwd()
+```
+
+```{r setup}
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(pander)
+
+measles <- readRDS("data/measles.RDS")
+
+cmeasles  <- measles %>% filter(!suspicious)
+```
+
+## checking data
+
+I notice two annoyances:
+
+  1. In some columns `-1` is used instead of `NA`
+  2. Religious refusal is boolean ?!?
+  2. Lots of missing values.
+  3. The ratios of vaccinations and students refusing don't add up.
+  4. In one school `160%` refused for other reasons.
+
+### weirdness
+```{r, fig.cap="correspondance mmr with xmed"}
+ptm <- proc.time()
+ggplot(measles, mapping=aes(x=mmr, y=replace_na(xmed,0))) + 
+  geom_point(alpha = 0.2) 
+proc.time()-ptm
+```
+```{r, fig.cap="correspondance mmr with xper"}
+ggplot(measles, mapping=aes(x=mmr, y=replace_na(xper,0))) + 
+  geom_point(alpha = 0.2) 
+```
+
+These are suspicious. There is a clearly a diagonal line visible. 
+There should not be points above - either they withdrew the consent, or were wrongly reported vaccinated.
+It seems many just report 100%. 
+And the magic school where 169% rejected - on the figure this looks like a reasonable typo - 16.9% may fit. But still the `mmr` is 92.3% - way too high.
+
+```{r weird entries}
+susps <- measles %>% filter(suspicious) %>% select(-lng,-lat)
+```
+In total there are `r nrow(susps)` suspicious entries - that's not much compared out of `r nrow(measles)`.
+
+
+### Imputation
+
+I didn't want to exclude all the `NA`s.
+
+#### xmed and xper
+
+seem simple.  They are `NA` for `100%` schools. 
+So in most cases the `NA` just may be `0`.
+
+#### xrel
+
+is harder as it is not numerically reported. 
+But mmr and xmed seem to be reliable - so I decided to have all *unexplained* non-vaccing together.  Of course this will group religious with all where no explanation was required.
+
+#### School type
+School type seemets interesting, but has lots of `NA`s.  
+Seems the reason is most states don't report these. 
+Not much I can do there.
+```{r mmr unreported}
+pander(measles %>% group_by(type, state) %>% summarise(n=n()) %>%
+       spread(type,n), caption = "types of school vs. states",
+     split.tables = Inf)
+```
+
+#### Enroll
+
+Number of students would be useful for a weighted average.
+
+```{r mmr unreported}
+pander(measles %>% group_by( state) %>% 
+       summarise(median=median(enroll, na.rm = T),
+		 mad = mad(enroll, na.rm = T)),
+     caption = "types of school vs. states",
+     split.tables = Inf)
+```
+
+The overall median is `r median(measles$enroll, na.rm = T)` and 
+mad `r mad(measles$enroll, na.rm = T)`.
+I chose 100 as guess for the undocumented ones so that there would be a nice log10.
+
+
+```{r, fig.cap="distribution mmr(measles plus vac)"}
+ggplot(cmeasles, mapping=aes(x=mmr)) + 
+  geom_histogram(binwidth=5) +
+  scale_y_log10() + annotation_logticks(sides=c("l")) +
+  theme_light()
+```
+
+```{r, fig.cap="distribution of overall vac"}
+ggplot(cmeasles, mapping=aes(x=overall)) + 
+  geom_histogram(binwidth=5) +
+  scale_y_log10() + annotation_logticks(sides=c("l"))
+```
+
+```{r, fig.cap="correspondance mmr with vac"}
+ggplot(measles, mapping=aes(x=overall, y=mmr)) + 
+  geom_point(alpha = 0.2) 
+```
+A few odd ones where overall vaccination is lower than mmr. But since I don't use overall later I will ignore this.
+
+xrel is bool!
+```{r, fig.cap="distribution of mmr in schools with religious exclusions"}
+ggplot(cmeasles, mapping=aes(x=mmr)) + 
+  geom_histogram(binwidth=5) +
+  scale_y_log10() + annotation_logticks(sides=c("l"))
+```
+
+It should be mmr + xmed < 100!
+
+```{r, fig.cap="distribution of mmr in schools with xmed"}
+ggplot(cmeasles, mapping=aes(y=mmr, x=xmed)) + 
+  geom_point()
+cmeasles %>% filter(xmed > 50)
+```
+```{r, fig.cap="distribution of mmr in schools with xper"}
+ggplot(cmeasles, mapping=aes(y=mmr, x=xper)) + 
+  geom_point()
+cmeasles %>% filter(xmed > 50)
+```
+
+
+```{r, fig.cap="distribution of mmr in schools with either exemption"}
+ggplot(cmeasles, mapping=aes(x=xper)) + 
+  geom_histogram(binwidth=5) +
+  scale_y_log10() + annotation_logticks(sides=c("l"))
+
+ggplot(cmeasles, mapping=aes(x=xper,y=mmr)) + 
+  geom_point()
+```
+
+
+columns:
+  - state: US state
+  - enroll: number of students
+  - mmr: vaccination ratio (percent)
+
+Note: 
+  - has only one sample per school.
+  - only 15 states
+
+```{r}
+msum <- measles %>% 
+  filter(!is.na(enroll), mmr>=0) %>%
+  group_by(state, year) %>%
+  summarize(allpup=sum(enroll), nummmr=(sum(enroll*mmr/100))) %>%
+  ungroup() %>%
+  mutate(ratio = nummmr/allpup)
+
+ggplot(msum, mapping = aes(x=state, y=ratio)) + geom_point()
+```
+
+```{r kinds of school}
+cmeasles %>% group_by(type) %>% summarise(n=n())%>% arrange(-n)
+```
+Lots of unlabelled. Private don't play much of a role.
+
+```{r states}
+cmeasles %>% group_by(state) %>% summarise(n=n(),enrolls = sum(enroll, na.rm=T)) %>% arrange(-n)
+```
+Everything is dwarfed by California and Illinois.
+
+
+## Visualisierung:
+
+### Idea ternary plot:
+
+```{r}
+library(ggtern)
+cm2 <- cmeasles %>% 
+  mutate(xmed = replace_na(xmed,0),
+	 xother = 100 - mmr - xmed,
+	 enroll = replace_na(enroll,100)) %>%
+  mutate_at(vars(mmr, xmed, xother), ~./100)
+cms <- sample_n(cm2,100)
+
+my_breaks  <-  10^seq(2,6)
+```
+
+```{r each school}
+ggtern(cm2, aes(mmr,xmed,xother)) +
+  geom_point_swap(map = aes(fill = type), 
+		  alpha = 0.5) + 
+  scale_L_continuous("vaccinated") + 
+  scale_R_continuous("refuse other") + 
+  scale_T_continuous("refuse medical") + 
+  theme_tropical()
+  #theme_linedraw()
+  #theme_bvbg()
+
+```
+
+```{r}
+ptm <- proc.time()
+#cms <- cm2 %>% filter(type == "Kindergarten")
+ggtern(cm2, aes(mmr,xmed,xother)) +
+  geom_tri_tern(bins = 30, aes(fill=..stat.., value=enroll), fun=function(z){(sum(z))}) +
+  scale_L_continuous("vaccinated") + 
+  Llab("measles vaccinated") +
+  scale_R_continuous("other") + 
+  Rlab("other refusal") + 
+  scale_T_continuous("medical") + 
+  Tlab("medical refusal") +
+  scale_fill_gradient(name = "count", trans = "log",
+		      breaks = my_breaks, labels = my_breaks,
+		      na.value = "gray10") + 
+  theme_matrix() +
+  theme(legend.background = element_rect(fill = "gray10")) 
+
+  # theme_tropical()
+  #theme_linedraw()
+  #theme_bvbg()
+  # scale_fill_continuous(low="thistle2", high="darkred", 
+  #                      guide="colorbar",na.value="white") +
+proc.time()-ptm
+
+```
+
+

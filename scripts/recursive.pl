@@ -29,13 +29,16 @@ foreach my $file (@files) {
     open(DATA, '<', $file) or die "Unable to open file $file!";
     while (<DATA>) {
       if (/readRDS\("([^"]+)"\)/){
-	print "$1 ";
+				print "$1 ";
+      }
+      if (/read[._]csv\(["']([^"']+)['"]/){
+				print "$1 ";
       }
       if (/\\input\{([^}]+)\}/){
-	print "$1.tex ";
+				print "$1.tex ";
       }
       if (/\\include\{([^}]+)\}/){
-	print "$1 ";
+				print "$1 ";
       }
     }
     print "\n";

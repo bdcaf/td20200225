@@ -3,3 +3,4 @@ data-raw/*.md
 data/*
 render/*
 make.auto
+.Rproj.user
