@@ -1,4 +1,4 @@
-REPORT_DIR:=render/report
+REPORT_DIR:=render
 CACHEDIR= cache
 LMK=latexmk -pdf -f --interaction=nonstopmode -outdir=$(REPORT_DIR) -bibtex
 .PHONY= all clean
@@ -7,11 +7,12 @@ DOCSCRIPTS:=$(wildcard doc/*.Rnw) $(wildcard doc/*/*.Rnw) $(wildcard doc/*.Rmd) 
 .PHONY: Makefile.auto clean
 
 R:=Rscript
-knitBase:= $R -e "require(knitr); require(markdown);" \
+knitBase=$R \
+	-e "require(knitr); require(markdown);" \
 	-e "require(pander)" \
 	-e "knitr::opts_knit[['set']](root.dir = normalizePath('./'))" \
-	-e "knitr::opts_chunk[['set']](cache.path='$(REPORT_DIR)/$(basename $(@F))/')" \
-	-e "knitr::opts_chunk[['set']](fig.path='$(REPORT_DIR)/$(basename $(@F))/')" \
+	-e "knitr::opts_chunk[['set']](cache.path='$(@D)/')" \
+	-e "knitr::opts_chunk[['set']](fig.path='$(@D)/')" \
 	-e "knitr::opts_chunk[['set']](fig.lp='fig:')" \
 	-e "knitr::opts_chunk[['set']](fig.show='asis')"
 
@@ -32,56 +33,23 @@ data-raw/%: data-raw/Makefile
 data/%.RDS: scripts/create_%.R
 	$R $< $@
 
+BLOGLOC:=blogdir/$(shell basename `pwd`)
+toblog: $(REPORT_DIR)/post/index.md
+	-mkdir -p $(BLOGLOC)
+	cp -r $(<D)/* $(BLOGLOC)
 
-$(REPORT_DIR)/%.md : doc/%.md
-	cp $< $@
-$(REPORT_DIR)/%.tex : doc/%.tex
-	cp $< $@
-## word report
+
 # figures are not showing up yet!
-$(REPORT_DIR)/%.md : doc/%.Rmd
-	mkdir -p $(@D)
-	mkdir -p '$(REPORT_DIR)/$(basename $(@F))/'
-	echo $@
-	$R -e "require(knitr); require(markdown);" \
-	-e "require(pander)" \
-	-e "knitr::opts_knit[['set']](root.dir = normalizePath('./'))" \
-	-e "knitr::opts_chunk[['set']](cache.path='$(REPORT_DIR)/$(basename $(@F))/')" \
-	-e "knitr::opts_chunk[['set']](fig.path='$(REPORT_DIR)/$(basename $(@F))/')" \
-	-e "knitr::opts_chunk[['set']](fig.lp='fig:')" \
-	-e "knitr::opts_chunk[['set']](fig.show='asis')" \
-	-e "knitr::opts_chunk[['set']](dpi=144, fig.width=7, fig.height=6)" \
-	-e "knit('$<', '$(@)'); "
+$(REPORT_DIR)/%/index.md : doc/%/index.Rmd
+	-mkdir -p $(@D)
+	$(knitBase) -e "knit('$<', '$@')"
+	sed -i.bak -E 's:^!\[([^#]*)#?(.*)\]\($(@D)/(.*)\):{{< bundle-figure name="\3" class="\2"  caption="\1" >}}:g' $@ 
+	#perl -pe 's/^!\[([^#]*)#?(.*)\]\((.*)\)/{{< bundle-figure name="\3" class="\2"  caption="\1" >}}/g' $< > $@
 
-artifacts/%.docx: $(REPORT_DIR)/%.md
-		pandoc $+ -o $@
-
-
-## latex report
-$(REPORT_DIR)/%.bib: doc/%.bib
-	-mkdir -p $(REPORT_DIR)	
-	cp $< $@
-
-$(REPORT_DIR)/%.tex: doc/%.Rnw
-	-mkdir -p $(REPORT_DIR)	
-	$R  -e "require(knitr)" \
-		-e "knitr::opts_knit[['set']](root.dir = normalizePath('./'))" \
-		-e "knitr::opts_chunk[['set']](cache.path='$(REPORT_DIR)/$(basename $(@F))/')" \
-		-e "knitr::opts_chunk[['set']](fig.path='$(REPORT_DIR)/$(basename $(@F))/')" \
-		-e "knitr::opts_chunk[['set']](fig.lp='fig:')" \
-		-e "knitr::opts_chunk[['set']](echo=TRUE, warning=FALSE)" \
-		-e "knitr::opts_chunk[['set']](results='asis', dpi=144, fig.width=4, fig.height=3)" \
-		-e "knitr::knit('$<', output='$@')"
-
-
-artifacts/%.pdf: $(REPORT_DIR)/%.pdf
-	cp $< $@
-
-$(REPORT_DIR)/%.pdf: $(REPORT_DIR)/%.tex $(REPORT_DIR)/bibliography.bib
-	$(LMK) $<
 # end generic 
 
 #cleaning
+.PHONY: dataclean articlen docclean clean
 clean: docclean articlean dataclean
 
 dataclean:
