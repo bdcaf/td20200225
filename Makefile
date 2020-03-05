@@ -33,7 +33,8 @@ data-raw/%: data-raw/Makefile
 data/%.RDS: scripts/create_%.R
 	$R $< $@
 
-BLOGLOC:=blogdir/$(shell basename `pwd`)
+BLOGDIR:=~/Code/site/bdcaf/content/post/dev/tidytuesday/
+BLOGLOC:=$(BLOGDIR)/$(shell basename `pwd`)
 toblog: $(REPORT_DIR)/post/index.md
 	-mkdir -p $(BLOGLOC)
 	cp -r $(<D)/* $(BLOGLOC)

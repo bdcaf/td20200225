@@ -1,4 +1,6 @@
-# td20180225
+# Tidy Tuesday 20200225
+
+A tidy analysis for the [TidyTuesday](https://github.com/rfordatascience/tidytuesday) dataset for [2020-02-25](https://github.com/rfordatascience/tidytuesday/tree/master/data/2020/2020-02-25) (American Measles Vaccination in Schools).
 
 This was started using the [cookiecutter-r-dataanalysis-template](https://github.com/bdcaf/cookiecutter-r-data-analysis).
 
